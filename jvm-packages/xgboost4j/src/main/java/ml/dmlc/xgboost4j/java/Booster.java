@@ -16,6 +16,7 @@
 package ml.dmlc.xgboost4j.java;
 
 import java.io.*;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -374,25 +375,57 @@ public class Booster implements Serializable, KryoSerializable {
    *
    * @return featureMap  key: feature index, value: feature importance score, can be nill
    * @throws XGBoostError native error
+   * @throws IllegalArgumentException when importance_type not in accepted range
    */
-  public Map<String, Integer> getFeatureScore(String featureMap) throws XGBoostError {
+  public Map<String, Float> getFeatureScore(String featureMap, String importanceType)
+    throws XGBoostError, IllegalArgumentException {
+
+    importanceType = importanceType.toLowerCase();
+    List<String> importanceTypes = Arrays.asList("weight", "gain", "cover");
+    if (!importanceTypes.contains(importanceType)) {
+      String msg = String.format("Importance type invalid\nInput: %s", importanceType);
+      logger.error(new IllegalArgumentException(msg))
+    }
+
+
     String[] modelInfos = getModelDump(featureMap, false);
-    Map<String, Integer> featureScore = new HashMap<String, Integer>();
+    Map<String, Float> featureScore = new HashMap<String, Float>();
+    Map<String, Float> featureNorm  = new HashMap<String, Int>();
+    importanceType += "=";
     for (String tree : modelInfos) {
       for (String node : tree.split("\n")) {
         String[] array = node.split("\\[");
         if (array.length == 1) {
           continue;
         }
-        String fid = array[1].split("\\]")[0];
-        fid = fid.split("<")[0];
+        String fid = array[1].split("\\]")[0].split("<")[0];
+        Float  val = 1.0;
+
+        if (importanceType != "weight=") {
+          val = Float.parseFloat(array[1].split("\\]")[1].split(importanceType)[1].split(",")[0]);
+        }
+
         if (featureScore.containsKey(fid)) {
-          featureScore.put(fid, 1 + featureScore.get(fid));
+          featureScore.put(fid, val + featureScore.get(fid));
+          featureNorm.put(fid, 1 + featureNorm.get(fid));
         } else {
-          featureScore.put(fid, 1);
+          featureScore.put(fid, val);
+          featureNorm.put(fid,1);
+        }
+
+      }
+    }
+
+    // normalize for gain and cover
+    if (importanceType != "weight=") {
+      for (String fid : featureScore) {
+        Int norm = featureNorm.get(fid);
+        if (norm != 0) {
+          featureScore.put(fid, featureScore.get(fid) / norm);
         }
       }
     }
+
     return featureScore;
   }
 

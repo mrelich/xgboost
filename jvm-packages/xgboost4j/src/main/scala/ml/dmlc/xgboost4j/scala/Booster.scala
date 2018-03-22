@@ -193,8 +193,9 @@ class Booster private[xgboost4j](private[xgboost4j] var booster: JBooster)
    * @return featureMap  key: feature index, value: feature importance score
    */
   @throws(classOf[XGBoostError])
-  def getFeatureScore(featureMap: String = null): mutable.Map[String, Integer] = {
-    booster.getFeatureScore(featureMap).asScala
+  def getFeatureScore(featureMap: String = null, importanceType: String = "weight")
+    : mutable.Map[String, Float] = {
+    booster.getFeatureScore(featureMap, importanceType).asScala
   }
 
   def toByteArray: Array[Byte] = {
